@@ -1,0 +1,15 @@
+{
+  "name": "discord-multi-recorder",
+  "version": "1.0.0",
+  "private": true,
+  "main": "record.js",
+  "scripts": { "start": "node record.js" },
+  "dependencies": {
+    "@discordjs/opus": "latest",
+    "@discordjs/voice": "latest",
+    "@snazzah/davey": "latest",
+    "discord.js": "latest",
+    "dotenv": "latest",
+    "prism-media": "latest"
+  }
+}
