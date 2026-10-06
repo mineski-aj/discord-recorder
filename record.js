@@ -20,6 +20,19 @@ const GUILD_ID = process.env.GUILD_ID;
 const OUTPUT_DIR = process.env.OUTPUT_DIR || './recordings';
 const ANNOUNCE = process.env.ANNOUNCE !== 'false';
 const NICKNAME = process.env.BOT_NICKNAME || '🔴 Recording';
+const FORMAT = (process.env.OUTPUT_FORMAT || 'mp3').toLowerCase();
+
+// Output formats. Sizes are per speaker track, per hour.
+const FORMATS = {
+  mp3: { ext: 'mp3', track: ['-ac', '1', '-c:a', 'libmp3lame', '-b:a', '64k'], mix: ['-ac', '1', '-c:a', 'libmp3lame', '-b:a', '96k'] }, // ~29 MB/h
+  wav: { ext: 'wav', track: ['-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le'], mix: ['-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le'] }, // ~115 MB/h
+  ogg: { ext: 'ogg', track: ['-ac', '1', '-c:a', 'libopus', '-b:a', '64k'], mix: ['-c:a', 'libopus', '-b:a', '96k'] }, // ~29 MB/h
+};
+const OUT = FORMATS[FORMAT];
+if (!OUT) {
+  console.error(`OUTPUT_FORMAT must be one of: ${Object.keys(FORMATS).join(', ')}`);
+  process.exit(1);
+}
 
 if (!GUILD_ID || CHANNEL_IDS.length === 0) {
   console.error('Set GUILD_ID and CHANNEL_IDS in .env');
@@ -127,12 +140,12 @@ class ChannelRecorder {
     if (t) return t;
 
     const offsetMs = Date.now() - this.startTime;
-    const file = path.join(this.dir, `${userId}.ogg`);
+    const file = path.join(this.dir, `${userId}.${OUT.ext}`);
     const ff = spawn('ffmpeg', [
       '-hide_banner', '-loglevel', 'error',
       '-f', 's16le', '-ar', '48000', '-ac', '2', '-i', 'pipe:0',
       '-af', `adelay=delays=${offsetMs}:all=1`,
-      '-ac', '1', '-c:a', 'libopus', '-b:a', '64k', '-y', file,
+      ...OUT.track, '-y', file,
     ], { stdio: ['pipe', 'ignore', 'inherit'], detached: true, windowsHide: true }); // detached: Ctrl+C won't kill encoders mid-write
     ff.stdin.on('error', (e) => this.log(`encoder error (${userId}): ${e.message}`));
 
@@ -202,7 +215,7 @@ class ChannelRecorder {
       t.ff.stdin.end();
       await t.done;
       if (t.name && fs.existsSync(t.file)) {
-        const named = path.join(this.dir, `${safeName(t.name)}_${t.userId}.ogg`);
+        const named = path.join(this.dir, `${safeName(t.name)}_${t.userId}.${OUT.ext}`);
         fs.renameSync(t.file, named);
         t.file = named;
       }
@@ -221,7 +234,7 @@ class ChannelRecorder {
       args.push('-filter_complex',
         `amix=inputs=${files.length}:duration=longest:dropout_transition=0:normalize=0`);
     }
-    args.push('-c:a', 'libopus', '-b:a', '96k', '-y', path.join(this.dir, '_full_mix.ogg'));
+    args.push(...OUT.mix, '-y', path.join(this.dir, `_full_mix.${OUT.ext}`));
     if (await runFfmpeg(args)) this.log(`saved ${files.length} speaker track(s) + full mix`);
   }
 }

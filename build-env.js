@@ -34,6 +34,7 @@ groups.forEach((g, gi) => {
     `BOT_TOKENS=${part.map((r) => r.token).join(',')}`,
     'ANNOUNCE=true',
     'BOT_NICKNAME=🔴 Recording',
+    'OUTPUT_FORMAT=mp3',
     '',
   ].join('\n'));
   console.log(`.env.${g}: ${part.length} channels`);
