@@ -1,0 +1,6 @@
+.env
+env.live*
+recorders.csv
+recordings/
+node_modules/
+.DS_Store

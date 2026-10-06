@@ -19,12 +19,15 @@ const CHANNEL_IDS = list(process.env.CHANNEL_IDS);
 const GUILD_ID = process.env.GUILD_ID;
 const OUTPUT_DIR = process.env.OUTPUT_DIR || './recordings';
 const ANNOUNCE = process.env.ANNOUNCE !== 'false';
-const NICKNAME = process.env.BOT_NICKNAME || '🔴 Recording';
 const FORMAT = (process.env.OUTPUT_FORMAT || 'mp3').toLowerCase();
+
+// MP3 bitrates (kbps). 32/48 is clear for speech; raise via env if you want more quality.
+const MP3_TRACK_KBPS = parseInt(process.env.MP3_TRACK_KBPS, 10) || 32;
+const MP3_MIX_KBPS = parseInt(process.env.MP3_MIX_KBPS, 10) || 48;
 
 // Output formats. Sizes are per speaker track, per hour.
 const FORMATS = {
-  mp3: { ext: 'mp3', track: ['-ac', '1', '-c:a', 'libmp3lame', '-b:a', '64k'], mix: ['-ac', '1', '-c:a', 'libmp3lame', '-b:a', '96k'] }, // ~29 MB/h
+  mp3: { ext: 'mp3', track: ['-ac', '1', '-ar', '24000', '-c:a', 'libmp3lame', '-b:a', `${MP3_TRACK_KBPS}k`], mix: ['-ac', '1', '-ar', '24000', '-c:a', 'libmp3lame', '-b:a', `${MP3_MIX_KBPS}k`] }, // default 32k/48k: ~14 MB/h per speaker, ~22 MB/h mix
   wav: { ext: 'wav', track: ['-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le'], mix: ['-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le'] }, // ~115 MB/h
   ogg: { ext: 'ogg', track: ['-ac', '1', '-c:a', 'libopus', '-b:a', '64k'], mix: ['-c:a', 'libopus', '-b:a', '96k'] }, // ~29 MB/h
 };
@@ -98,8 +101,6 @@ class ChannelRecorder {
     this.label = channel.name;
     this.dir = path.join(SESSION_DIR, `${safeName(channel.name)}_${channel.id}`);
     fs.mkdirSync(this.dir, { recursive: true });
-
-    await this.guild.members.me.setNickname(NICKNAME).catch(() => {});
 
     this.connection = joinVoiceChannel({
       channelId: channel.id,
