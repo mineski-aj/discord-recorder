@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recorder Dashboard</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --text: #1c2030; --muted: #667085; --line: #e3e6ec;
+    --green: #16a34a; --amber: #d97706; --red: #dc2626; --blue: #2563eb; --gray: #8a93a6;
+    --btn: #1c2030; --btnText: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218; --card: #181c25; --text: #e8eaf0; --muted: #8b93a7; --line: #2a303d;
+      --green: #4ade80; --amber: #fbbf24; --red: #f87171; --blue: #60a5fa; --gray: #7a8397;
+      --btn: #e8eaf0; --btnText: #0f1218;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; justify-content: space-between; }
+  h1 { font-size: 18px; margin: 0; }
+  .sub { color: var(--muted); font-size: 12px; font-weight: 400; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; font-weight: 600; font-size: 12px; border: 1px solid var(--line); background: var(--card); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray); }
+  .recording .dot { background: var(--green); animation: pulse 1.4s infinite; }
+  .standby .dot { background: var(--blue); }
+  .paused .dot, .reconnecting .dot, .connecting .dot, .stopping .dot, .cutting .dot, .finalizing .dot { background: var(--amber); }
+  .failed .dot, .crashed .dot { background: var(--red); }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  nav { display: flex; gap: 4px; margin: 16px 0 0; border-bottom: 1px solid var(--line); }
+  nav button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 16px; color: var(--muted); }
+  nav button.on { color: var(--text); border-bottom-color: var(--text); }
+  .tab { display: none; padding-top: 16px; }
+  .tab.on { display: block; }
+
+  .hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; padding: 18px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  .timer { font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -1px; line-height: 1; }
+  .timer-label { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button { font: inherit; font-weight: 600; padding: 9px 18px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--btn); color: var(--btnText); border-color: var(--btn); }
+  button.danger { color: var(--red); border-color: var(--red); }
+  button.small { padding: 3px 10px; font-weight: 500; font-size: 12px; }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  .hide { display: none !important; }
+  input[type=text], input[type=number], input[type=search], select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+  #folder { width: 260px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+  .card .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .k { color: var(--muted); font-size: 12px; }
+  .warn { color: var(--red); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+  section > h2 { font-size: 13px; margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .speaking { color: var(--green); font-weight: 600; white-space: normal; }
+  .err { color: var(--red); font-size: 12px; white-space: normal; }
+  #log { height: 240px; overflow: auto; padding: 10px 16px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #log div { white-space: pre-wrap; word-break: break-word; }
+  #log .bad { color: var(--red); }
+  #log .t { color: var(--muted); }
+  #conn { color: var(--red); font-weight: 600; display: none; }
+  .empty { padding: 16px; color: var(--muted); }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--muted); }
+
+  /* settings */
+  .form { padding: 4px 20px 20px; max-width: 760px; }
+  .row { padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .row > label.t, .row > .t { display: block; font-weight: 600; margin-bottom: 2px; }
+  .hint { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+  .opt { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-top: 8px; cursor: pointer; }
+  .opt input { margin-top: 3px; }
+  .opt.sel { border-color: var(--text); }
+  .opt b { display: block; }
+  .opt span { color: var(--muted); font-size: 12px; }
+  .inline { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+  .inline label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .inline input[type=number] { width: 110px; }
+  .est { background: var(--bg); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .saved { color: var(--green); font-weight: 600; margin-left: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Recorder Dashboard</h1>
+      <div class="sub" id="meta"></div>
+    </div>
+    <div><span id="conn">Connection to dashboard lost, retrying…</span> <span class="pill" id="state"><span class="dot"></span><span id="stateText">connecting</span></span></div>
+  </header>
+
+  <nav>
+    <button class="on" data-tab="dash">Dashboard</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+
+  <!-- ===================== DASHBOARD ===================== -->
+  <div class="tab on" id="tab-dash">
+    <div class="hero">
+      <div>
+        <div class="timer" id="timer">00:00:00</div>
+        <div class="timer-label" id="timerLabel">Recording time</div>
+      </div>
+      <div class="controls">
+        <input type="text" id="folder" placeholder="Folder name (blank = date & time)" maxlength="80" autocomplete="off">
+        <button class="primary" id="bStart">Start recording</button>
+        <button id="bConnect" title="Bring the bots into their channels without recording">Connect bots only</button>
+        <button id="bPause">Pause</button>
+        <button id="bResume">Resume</button>
+        <button id="bCut" title="End this recording and save it. Bots stay in their channels.">Cut recording</button>
+        <button class="danger" id="bStop">Stop server</button>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="v" id="cOnline">0 / 0</div><div class="k">Bots in channels</div></div>
+      <div class="card"><div class="v" id="cLive">0</div><div class="k">Recording now</div></div>
+      <div class="card"><div class="v" id="cSpeaking">0</div><div class="k">Speaking now</div></div>
+      <div class="card"><div class="v" id="cIssues">0</div><div class="k">Needs attention</div></div>
+      <div class="card"><div class="v" id="cSize">0 MB</div><div class="k">Recorded (this recording)</div></div>
+      <div class="card"><div class="v" id="cDisk">–</div><div class="k">Disk free</div></div>
+      <div class="card"><div class="v" id="cPaused">0:00</div><div class="k">Total paused time</div></div>
+    </div>
+
+    <section>
+      <h2>Bots <input type="search" id="filter" placeholder="Filter…"></h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Channel</th><th>Bot</th><th>Status</th><th>Recorded</th><th>Speakers</th><th>Size</th><th>Speaking now</th><th></th></tr></thead>
+        <tbody id="bots"></tbody>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>Log</h2>
+      <div id="log"></div>
+    </section>
+
+    <section>
+      <h2>Past recordings <button id="bRefresh" class="small">Refresh</button></h2>
+      <div class="scroll"><table>
+        <thead><tr><th>Folder</th><th>Channels</th><th>Size</th><th>Location</th></tr></thead>
+        <tbody id="sessions"></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <!-- ===================== SETTINGS ===================== -->
+  <div class="tab" id="tab-settings">
+    <section>
+      <h2>Recording settings <span class="sub">Saved to settings.json. Applies from the next recording; one in progress is not affected.</span></h2>
+      <div class="form">
+
+        <div class="row">
+          <label class="t" for="sFormat">Audio format</label>
+          <div class="hint">MP3 is the smallest and plays everywhere. WAV is uncompressed (about 8x bigger). OGG (Opus) is small with good quality.</div>
+          <select id="sFormat">
+            <option value="mp3">MP3</option>
+            <option value="ogg">OGG (Opus)</option>
+            <option value="wav">WAV (uncompressed)</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <div class="t">What to save for each channel</div>
+          <div class="hint">"Full mix only" is the lightest option: one encoder per channel instead of one per speaker, so it uses much less RAM, CPU and disk.</div>
+          <label class="opt" data-mode="both"><input type="radio" name="sMode" value="both"><div><b>Full mix + each speaker</b><span>One mixed file plus a separate track for every person who speaks.</span></div></label>
+          <label class="opt" data-mode="mix"><input type="radio" name="sMode" value="mix"><div><b>Full mix only</b><span>One mixed file per channel. Saves the most RAM and storage.</span></div></label>
+          <label class="opt" data-mode="tracks"><input type="radio" name="sMode" value="tracks"><div><b>Each speaker only</b><span>Separate tracks for every speaker, no mixed file.</span></div></label>
+        </div>
+
+        <div class="row" id="rowBitrate">
+          <div class="t">Quality (bitrate)</div>
+          <div class="hint">Higher = better sound, bigger files. 32 to 48 kbps is clear for speech.</div>
+          <div class="inline">
+            <label>Each speaker (kbps)<input type="number" id="sTrackKbps" min="8" max="320"></label>
+            <label>Full mix (kbps)<input type="number" id="sMixKbps" min="8" max="320"></label>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="t">Estimated storage</div>
+          <div class="est" id="estimate"></div>
+        </div>
+
+        <div class="row">
+          <label class="t" for="sDir">Save location</label>
+          <div class="hint">Parent folder on this computer. Each recording is saved in its own sub-folder, named when you press Start, with one folder per channel inside it.</div>
+          <input type="text" id="sDir" style="width:100%">
+        </div>
+
+        <div class="row">
+          <label class="opt" style="margin-top:0"><input type="checkbox" id="sAnnounce"><div><b>Announce in each voice channel's chat</b><span>Posts "now being recorded", "paused", "resumed" and "ended". Recommended, so people know when they are being recorded.</span></div></label>
+        </div>
+
+        <div class="row">
+          <label class="t" for="sStagger">Delay between bot logins (ms)</label>
+          <div class="hint">Bots connect one after another to stay clear of Discord rate limits. Lower is faster to start but riskier. Applies the next time the bots connect.</div>
+          <input type="number" id="sStagger" min="300" max="10000" step="100">
+        </div>
+
+        <div class="controls" style="margin-top:16px">
+          <button class="primary" id="sSave">Save settings</button>
+          <button id="sReset">Reset to defaults</button>
+          <span class="saved hide" id="sSaved">Saved</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let snap = null;
+let rx = 0; // browser time the last status arrived, so timers tick smoothly between updates
+
+const fmtTime = (ms) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, '0')).join(':');
+};
+const fmtBytes = (b) => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.round(b / 1e3) + ' KB';
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function post(action, body = {}) {
+  try {
+    const r = await fetch('/api/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!j.ok) alert(j.error);
+    return j.ok;
+  } catch (e) { alert('Request failed: ' + e.message); return false; }
+}
+
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
+  };
+});
+
+// ---------- controls ----------
+$('bStart').onclick = () => post('start', { folderName: $('folder').value });
+$('bConnect').onclick = () => post('connect');
+$('bPause').onclick = () => post('pause');
+$('bResume').onclick = () => post('resume');
+$('bCut').onclick = () => {
+  if (confirm('Cut the recording?\n\nThe current recording is ended and saved. The bots stay in their channels, and you can press Start for a new recording.')) post('cut');
+};
+$('bStop').onclick = () => {
+  const recording = snap && (snap.state === 'recording' || snap.state === 'paused');
+  const msg = recording
+    ? 'Stop the server?\n\nThe recording is ended and saved, and all bots leave their voice channels. This can take a minute.'
+    : 'Stop the server?\n\nAll bots will leave their voice channels.';
+  if (confirm(msg)) post('stop');
+};
+$('filter').oninput = () => snap && renderBots();
+
+const IN_CHANNEL = ['standby', 'recording', 'paused', 'reconnecting', 'finalizing'];
+function render() {
+  const s = snap, st = s.state;
+  $('stateText').textContent = st === 'idle' ? 'offline' : st;
+  $('state').className = 'pill ' + (st === 'idle' ? '' : st);
+  $('bStart').classList.toggle('hide', !(st === 'idle' || st === 'standby'));
+  $('folder').classList.toggle('hide', !(st === 'idle' || st === 'standby'));
+  $('bConnect').classList.toggle('hide', st !== 'idle');
+  $('bPause').classList.toggle('hide', st !== 'recording');
+  $('bResume').classList.toggle('hide', st !== 'paused');
+  $('bCut').classList.toggle('hide', !(st === 'recording' || st === 'paused' || st === 'cutting'));
+  $('bStop').classList.toggle('hide', st === 'idle');
+  $('bCut').disabled = st === 'cutting';
+  $('bStop').disabled = !(st === 'standby' || st === 'recording' || st === 'paused');
+  $('meta').textContent = `Server ${s.guildId || '?'} · saving to ${s.outputDir}`;
+
+  const bots = s.bots;
+  const online = bots.filter((b) => IN_CHANNEL.includes(b.state)).length;
+  const live = bots.filter((b) => b.state === 'recording' || b.state === 'paused').length;
+  const issues = bots.filter((b) => ['failed', 'crashed', 'reconnecting'].includes(b.state)).length;
+  $('cOnline').textContent = `${online} / ${bots.length}`;
+  $('cLive').textContent = live;
+  $('cSpeaking').textContent = bots.reduce((n, b) => n + b.speaking.length, 0);
+  $('cIssues').textContent = issues;
+  $('cIssues').className = 'v' + (issues ? ' warn' : '');
+  $('cSize').textContent = fmtBytes(bots.reduce((n, b) => n + b.bytes, 0));
+  if (s.disk) {
+    $('cDisk').textContent = fmtBytes(s.disk.freeBytes);
+    $('cDisk').className = 'v' + (s.disk.freeBytes < 5e9 ? ' warn' : '');
+  }
+  renderBots();
+  tick();
+  if (!formDirty) fillForm(s.settings);
+}
+
+const canReconnect = (b) => (snap.state === 'standby' || snap.state === 'recording' || snap.state === 'paused') && ['standby', 'recording', 'paused', 'reconnecting', 'failed'].includes(b.state);
+let pressing = false; // don't rebuild the table under a mouse press, or the click is lost
+document.addEventListener('pointerdown', () => { pressing = true; });
+document.addEventListener('pointerup', () => { pressing = false; });
+$('bots').addEventListener('click', (e) => {
+  const id = e.target.dataset?.reconnect;
+  if (!id) return;
+  const b = snap.bots.find((x) => x.id === id);
+  const healthy = b && (b.state === 'recording' || b.state === 'paused' || b.state === 'standby');
+  if (healthy && !confirm(`${b.label || id} looks healthy. Force reconnect anyway?\n\nIf it is recording, there will be a few seconds of silence.`)) return;
+  post('reconnect', { id });
+});
+
+function renderBots() {
+  if (pressing) return;
+  const q = $('filter').value.toLowerCase();
+  const rows = snap.bots
+    .filter((b) => !q || `${b.label} ${b.tag} ${b.id} ${b.state}`.toLowerCase().includes(q))
+    .map((b) => `<tr>
+      <td>${esc(b.label || b.id)}${b.error ? `<div class="err">${esc(b.error)}</div>` : ''}</td>
+      <td class="mono">${esc(b.tag || '–')}</td>
+      <td><span class="pill ${b.state}"><span class="dot"></span>${b.state}</span></td>
+      <td class="num">${['recording', 'paused', 'finalizing'].includes(b.state) ? fmtTime(b.recMs) : '–'}</td>
+      <td class="num">${b.tracks || '–'}</td>
+      <td class="num">${b.bytes ? fmtBytes(b.bytes) : '–'}</td>
+      <td class="speaking">${b.speaking.map(esc).join(', ')}</td>
+      <td>${canReconnect(b) ? `<button class="small" data-reconnect="${esc(b.id)}">Reconnect</button>` : ''}</td>
+    </tr>`).join('');
+  $('bots').innerHTML = rows || '<tr><td colspan="8" class="empty">No bots</td></tr>';
+}
+
+// Smooth timers between 1 s server updates.
+function tick() {
+  if (!snap) return;
+  const s = snap.session, st = snap.state;
+  const label = { idle: 'Offline · no bots connected', standby: 'Standby · bots connected, not recording', cutting: 'Finalizing files…', stopping: 'Stopping…' }[st];
+  if (!s) { $('timer').textContent = '00:00:00'; $('timerLabel').textContent = label || ''; $('cPaused').textContent = '0:00'; return; }
+  const drift = Date.now() - rx;
+  $('timer').textContent = fmtTime(s.recMs + (st === 'recording' ? drift : 0));
+  $('timerLabel').textContent = label || (st === 'paused' ? 'Paused · ' : 'Recording · ') + s.name;
+  $('cPaused').textContent = fmtTime(s.pausedMs + (st === 'paused' ? drift : 0)).replace(/^00:/, '');
+}
+setInterval(tick, 250);
+
+// ---------- settings form ----------
+const KBPS_FORMATS = ['mp3', 'ogg'];
+let formDirty = false; // true while there are unsaved edits (stops the 1 s status updates overwriting them)
+let bit = null; // working copy of the per-format bitrates, so switching format and back loses nothing
+let curFmt = null;
+
+function fillForm(st) {
+  bit = JSON.parse(JSON.stringify(st.bitrates));
+  curFmt = st.format;
+  $('sFormat').value = st.format;
+  document.querySelectorAll('input[name=sMode]').forEach((r) => { r.checked = r.value === st.mode; });
+  $('sDir').value = st.outputDir;
+  $('sAnnounce').checked = st.announce;
+  $('sStagger').value = st.staggerMs;
+  loadKbps();
+  formDirty = false;
+  refreshForm();
+}
+
+function loadKbps() {
+  if (!bit[curFmt]) return;
+  $('sTrackKbps').value = bit[curFmt].track;
+  $('sMixKbps').value = bit[curFmt].mix;
+}
+
+function onFormInput(e) {
+  formDirty = true;
+  if (e.target.id === 'sFormat') { curFmt = $('sFormat').value; loadKbps(); }
+  else if ((e.target.id === 'sTrackKbps' || e.target.id === 'sMixKbps') && bit[curFmt]) {
+    bit[curFmt] = { track: +$('sTrackKbps').value, mix: +$('sMixKbps').value };
+  }
+  refreshForm();
+}
+
+function refreshForm() {
+  const fmt = $('sFormat').value;
+  const mode = document.querySelector('input[name=sMode]:checked')?.value || 'both';
+  document.querySelectorAll('.opt[data-mode]').forEach((o) => o.classList.toggle('sel', o.dataset.mode === mode));
+  const kbps = KBPS_FORMATS.includes(fmt);
+  $('rowBitrate').classList.toggle('hide', !kbps);
+  $('sTrackKbps').parentElement.classList.toggle('hide', mode === 'mix');
+  $('sMixKbps').parentElement.classList.toggle('hide', mode === 'tracks');
+
+  // Storage estimate: MB per hour = kbps * 0.45. WAV is 16 kHz mono 16-bit = 115 MB/h.
+  const track = fmt === 'wav' ? 115.2 : +$('sTrackKbps').value * 0.45;
+  const mix = fmt === 'wav' ? 115.2 : +$('sMixKbps').value * 0.45;
+  const parts = [];
+  if (mode !== 'tracks') parts.push(`Full mix: <b>${mix.toFixed(0)} MB</b> per hour per channel`);
+  if (mode !== 'mix') parts.push(`Each speaker: <b>${track.toFixed(0)} MB</b> per hour of recording (every track runs the full length)`);
+  if (mode === 'mix') parts.push('<span class="sub">One file per channel, however many people speak.</span>');
+  $('estimate').innerHTML = parts.join('<br>');
+}
+['sFormat', 'sTrackKbps', 'sMixKbps', 'sDir', 'sAnnounce', 'sStagger'].forEach((id) => { $(id).addEventListener('input', onFormInput); });
+document.querySelectorAll('input[name=sMode]').forEach((r) => { r.addEventListener('change', onFormInput); });
+
+$('sSave').onclick = async () => {
+  const next = {
+    format: $('sFormat').value,
+    mode: document.querySelector('input[name=sMode]:checked')?.value || 'both',
+    announce: $('sAnnounce').checked,
+    outputDir: $('sDir').value,
+    staggerMs: +$('sStagger').value,
+    bitrates: bit,
+  };
+  if (await post('settings', { settings: next })) {
+    formDirty = false;
+    $('sSaved').classList.remove('hide');
+    setTimeout(() => $('sSaved').classList.add('hide'), 2500);
+  }
+};
+$('sReset').onclick = () => {
+  if (!confirm('Reset all recording settings to defaults? (Press Save afterwards to keep them.)')) return;
+  fillForm({ format: 'mp3', mode: 'both', announce: true, outputDir: './recordings', staggerMs: 1500, bitrates: { mp3: { track: 32, mix: 48 }, ogg: { track: 64, mix: 96 } } });
+  formDirty = true;
+};
+
+// ---------- log + sessions + connection ----------
+function addLog(e) {
+  const box = $('log');
+  const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  const d = document.createElement('div');
+  if (/fail|error|unexpected|crash/i.test(e.line)) d.className = 'bad';
+  d.innerHTML = `<span class="t">${new Date(e.t).toLocaleTimeString()}</span> ${esc(e.line)}`;
+  box.appendChild(d);
+  while (box.childElementCount > 500) box.firstChild.remove();
+  if (atEnd) box.scrollTop = box.scrollHeight;
+}
+
+async function loadSessions() {
+  try {
+    const list = await (await fetch('/api/sessions')).json();
+    $('sessions').innerHTML = list.map((x) => `<tr><td>${esc(x.name)}</td><td class="num">${x.channels}</td><td class="num">${fmtBytes(x.bytes)}</td><td class="mono">${esc(x.dir)}</td></tr>`).join('')
+      || '<tr><td colspan="4" class="empty">No recordings yet</td></tr>';
+  } catch {}
+}
+$('bRefresh').onclick = loadSessions;
+
+let wasRecording = false;
+function connect() {
+  const es = new EventSource('/events');
+  es.onopen = () => { $('conn').style.display = 'none'; };
+  es.onerror = () => { $('conn').style.display = ''; };
+  es.addEventListener('status', (ev) => {
+    snap = JSON.parse(ev.data);
+    rx = Date.now();
+    render();
+    const rec = ['recording', 'paused', 'cutting', 'stopping'].includes(snap.state);
+    if (wasRecording && !rec) loadSessions();
+    wasRecording = rec;
+  });
+  es.addEventListener('backlog', (ev) => { $('log').innerHTML = ''; JSON.parse(ev.data).forEach(addLog); });
+  es.addEventListener('log', (ev) => addLog(JSON.parse(ev.data)));
+}
+connect();
+loadSessions();
+</script>
+</body>
+</html>

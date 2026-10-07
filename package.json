@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "main": "record.js",
-  "scripts": { "start": "node record.js" },
+  "scripts": { "start": "node record.js", "dashboard": "node dashboard.js" },
   "dependencies": {
     "@discordjs/opus": "latest",
     "@discordjs/voice": "latest",

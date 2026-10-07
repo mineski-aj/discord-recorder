@@ -4,3 +4,4 @@ recorders.csv
 recordings/
 node_modules/
 .DS_Store
+settings.json
